@@ -1,33 +1,69 @@
 import json
 import select
 import socket
+import sys
 from cambio import Cambio
 
 class CambioServer:
-    def __init__(self, num_players):
+    def __init__(self, server_name, num_players):
         self.cambio = Cambio(num_players)
         self.num_players = num_players
         self.client_sockets = {} # Keys are sockets and values are addresses
         #TODO: Make sure that only one client can connect from each address so that if a client crashes and reconnects we can look it up in this dict and see which player number it was
         self.players = [] # Maps player number (index) to client socket
         self.server_socket = None
+        self.name_server_address = "catalog.cse.nd.edu"
+        self.name_server_port = 9097
+        self.server_name = server_name
+        self.port = 0
 
     def send_to_client(self, client_num, message):
-        print(message)
+        message_data = json.dumps(message).encode()
+        message_length = str(len(message_data)).zfill(10).encode()
+        message = message_length + message_data
+
+        self.players[client_num].sendall(message)
+
+        print(f"Sent to Player {client_num}: {message}") #TESTING
 
     def send_to_all_clients(self, message):
-        print(message)
+        for i in range(self.num_players):
+            self.send_to_client(i, message)
+        print(f"Sent to all players: {message}")
+
+    def send_heartbeat(self):
+        try:
+            udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            message = {
+                        "type": "cambio",
+                        "owner": "amitch27",
+                        "port": self.port,
+                        "project": self.server_name,
+                    }
+            udp_socket.sendto(json.dumps(message).encode(), (self.name_server_address, self.name_server_port))
+            print(f"Heartbeat sent to {self.name_server_address}:{self.name_server_port}")
+        except Exception as e:
+            print(f"Failed to send heartbeat: {e}")
+        finally:
+            udp_socket.close()
+
+    def setup(self):
+        #LOG AND CHECKPOINT ETC
+        pass
+
+    def log(self):
+        pass
 
     def accept_clients(self):
         pass
         #TODO: NEED TO WORK ON THIS
-        """
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind(('', self.port))
         server_socket.listen(5)
         self.port = server_socket.getsockname()[1]
         print(f"Listening on port {self.port}")
-        #self.send_heartbeat()
+        
+        self.send_heartbeat()
         
         self.client_sockets[server_socket] = "server"
         self.server_socket = server_socket
@@ -35,13 +71,12 @@ class CambioServer:
         for _ in range(self.num_players):
             (client_socket, address) = server_socket.accept()
             print(f"Client {address} connected")
-            client_socket.settimeout(1)
+            #client_socket.settimeout(1)
             self.client_sockets[client_socket] = address
-            self.players.append(client_socket)
-        
-        """
+            self.players.append(client_socket)  
 
     def send_game_state(self):
+        #TODO: UPDATE TO BE LIKE A PICTURE OF THE GAME
         self.send_to_all_clients(self.cambio.game_state())
 
     def wait_for_sticking(self):
@@ -64,9 +99,13 @@ class CambioServer:
         pass
 
     def get_client_input(self, client_num):
-        #TESTING
-        return input()
-    #TODO: ACTUALLY DO THIS
+        data = self.players[client_num].recv(1024).decode()
+        # TODO: IN CASE CLIENT CRASHES  
+        #if not data:
+        #    print(f"Player {client_num} (Client {self.client_sockets[self.players[client_num]]}) disconnected")
+        #    self.reconnect_client()
+        print(json.loads(data)) #TESTING
+        return json.loads(data)
 
     def play_game(self):
         #TODO: Figure out how to restore from log and checkpoint in case the server previously crashed
@@ -76,8 +115,11 @@ class CambioServer:
         while True:
             self.cambio.setup()
 
+            self.send_to_all_clients("The game is now starting.")
+
             for i, player in enumerate(self.cambio.players):
                 self.send_to_client(i, f"You are Player {i}. Your first two cards are {self.cambio.look_at_two(i)}")
+                self.send_to_client(i, "IMAGE OF GAME WITH CARDS FLIPPED OVER")
 
             game_over = False
             while not game_over:
@@ -158,18 +200,21 @@ class CambioServer:
             #TODO: WAIT FOR INPUT AND IF ANY CLIENTS PRESS 1 CONTINUE
             #IF ANY CLIENT PRESSES 0, RETURN BACK TO LOOP()       
                     
-    def loop(self):
+    def game_loop(self):
         while True:
             self.accept_clients()
             self.play_game()
     
 
 if __name__ == "__main__":
-    server = CambioServer(2)
-    server.loop()
+    if len(sys.argv) != 2:
+        print("Please include server name.")
+        sys.exit(1)
+        
+    server_name = sys.argv[1]
 
-
-
+    server = CambioServer(server_name, 2)
+    server.game_loop()
 
 
 #First Attempt at client socket connections and stuff
