@@ -65,7 +65,7 @@ class CambioClient:
         if len(input_data) > 20:
             print("Error: Input is too long, please try again.")
             return
-        print(input_data) #TESTING
+        #print(input_data) #TESTING
         self.socket.sendall(json.dumps(input_data).encode())
 
     def game_loop(self):

@@ -31,7 +31,7 @@ class Deck():
         self.ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
         self.deck = [Card(rank, suit) for suit in self.suits for rank in self.ranks]
         self.drawn = []
-        self.discarded = []
+        self.played_cards = []
 
         random.shuffle(self.deck)
 
@@ -53,7 +53,6 @@ class Player():
 class Cambio():
     def __init__(self, num_players):
         self.deck = None
-        self.played_cards = []
         self.players = [Player() for _ in range(num_players)]
         self.turn = 0
         self.num_cards = 4
@@ -83,23 +82,24 @@ class Cambio():
         game_state = {}
         for i, player in enumerate(self.players):
             game_state[f'Player{i}'] = str(player)
-        game_state['face-up'] = str(self.played_cards[-1]) if self.played_cards else "None"
+        game_state['face-up'] = str(self.deck.played_cards[-1]) if self.deck.played_cards else "None"
         return game_state
 
     def draw(self):
         self.players[self.turn].hand = self.deck.draw()
 
     def play(self):
-        self.played_cards.append(self.players[self.turn].hand)
+        self.deck.played_cards.append(self.players[self.turn].hand)
         self.players[self.turn].hand = None
 
+    #TODO: MORE ERROR HANDLING FOR ALL FUNCTIONS
     def place(self, pos):
         if self.players[self.turn].cards[pos] == None:
             raise ValueError(f"You do not have a card at position {pos}.")
         temp = self.players[self.turn].cards[pos]
         self.players[self.turn].cards[pos] = self.players[self.turn].hand
         self.players[self.turn].hand = None
-        self.played_cards.append(temp)
+        self.deck.played_cards.append(temp)
 
     def swap(self, pos1, player2, pos2):
         if self.players[self.turn].cards[pos1] == None:
@@ -112,23 +112,23 @@ class Cambio():
 
     def stick(self, stick_player, stuck_player, pos):
         if self.players[stuck_player].cards[pos] == None:
-            raise ValueError(f"Player {stuck_player} does not have a card at position {pos}.")
-        if self.players[stuck_player].cards[pos].rank != self.played_cards[-1].rank:
+            raise ValueError(f"Player {stick_player} attempted to stick Player {stuck_player}'s card at position {pos} but there is no card there.")
+        if self.players[stuck_player].cards[pos].rank != self.deck.played_cards[-1].rank:
             self.players[stick_player].cards.append(self.deck.draw())
-            raise ValueError(f"Player {stick_player} attempted to stick Player {stuck_player}'s card at position {pos} but failed.")
-        self.played_cards = self.players[stuck_player].cards[pos]
+            raise ValueError(f"Player {stick_player} attempted to stick Player {stuck_player}'s card at position {pos} but failed and has received a penalty card.")
+        self.deck.played_cards.append(self.players[stuck_player].cards[pos])
         self.players[stuck_player].cards[pos] = None
 
     def give(self, player1, pos1, player2, pos2):
         if self.players[player1].cards[pos1] == None:
-            raise ValueError(f"")
+            raise ValueError(f"ERROR") #TODO
         if self.players[player2].cards[pos2] != None:
-            raise ValueError(f"")
+            raise ValueError(f"ERROR") #TODO
         self.players[player2].cards[pos2] = self.players[player1].cards[pos1]
         self.players[player1].cards[pos1] = None
 
     def has_power(self):
-        card = self.played_cards[-1]
+        card = self.deck.played_cards[-1]
         if card.rank not in {'7', '8', '9', '10', 'J', 'Q', 'K'}:
             return
         elif card.rank in {'7', '8'}:
@@ -142,7 +142,7 @@ class Cambio():
 
     def use_power(self, input):
         #TODO: NEEDS MORE ERROR HANDLING
-        card = self.played_cards[-1]
+        card = self.deck.played_cards[-1]
         if card.rank not in {'7', '8', '9', '10', 'J', 'Q', 'K'}:
             return
         if len(input) == 1 and input[0] == "-1":
