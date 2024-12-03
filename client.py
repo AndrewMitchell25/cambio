@@ -21,7 +21,7 @@ class CambioClient:
                 name_server.request("GET", "/query.json")
                 response = json.loads(name_server.getresponse().read())
                 for r in response:
-                    if r["type"] == "cambio" and r["project"] == server_name:
+                    if r.get("type", "") == "cambio" and r.get("project", "") == server_name:
                         host = r["name"]
                         port = r["port"]
                         try:
@@ -51,6 +51,11 @@ class CambioClient:
                         break
                     message_data += chunk
             message = json.loads(message_data)
+
+            if isinstance(message, str) and message.startswith("Error"):
+                print(message)
+                exit(1)
+
             return message   
         
         except Exception as e:

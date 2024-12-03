@@ -24,6 +24,17 @@ class Card:
 
     def __str__(self):
         return self.rank + self.suit
+    
+    def display(self, show=False, num=None):
+        image = [
+            "________",
+            f"|{str(self) if show else f"{str(num)} " if num != None else "  "}{"" if self.rank == '10' and show else " "}   |",
+            "|      |",
+            "|      |",
+            f"|{"" if self.rank == '10' and show else "_"}___{str(self) if show else "__"}|"
+        ]
+
+        return image
 
 class Deck():
     def __init__(self):
@@ -39,6 +50,16 @@ class Deck():
         card = self.deck.pop() if self.deck else None #TODO: FIGURE OUT WHAT TO DO WHEN CARDS RUN OUT
         self.drawn.append(card)
         return card
+    
+    def display(self):
+        image = [
+            "________",
+            "|      |",
+            "| DECK |",
+            "|      |",
+            "|______|"
+        ]
+        return image
 
 class Player():
     def __init__(self):
@@ -53,6 +74,7 @@ class Player():
 class Cambio():
     def __init__(self, num_players):
         self.deck = None
+        self.num_players = num_players
         self.players = [Player() for _ in range(num_players)]
         self.turn = 0
         self.num_cards = 4
@@ -77,12 +99,61 @@ class Cambio():
         self.extra_cards = -1
 
 
-    def game_state(self):
+    def game_state(self, first_turn=False):
         #TODO: UNFINISHED
-        game_state = {}
-        for i, player in enumerate(self.players):
-            game_state[f'Player{i}'] = str(player)
-        game_state['face-up'] = str(self.deck.played_cards[-1]) if self.deck.played_cards else "None"
+
+        game_state = []
+        middle = [
+            self.deck.played_cards[-1].display(show=True) if self.deck.played_cards else self.deck.deck[0].display(show=False),
+            self.deck.display()
+        ]
+
+        player_cards = [[card.display(show=False, num=i) for i, card in enumerate(player.cards)] for player in self.players]
+        
+        for p in range(self.num_players):
+            state = ""
+            
+            other_players = [i for i in range(self.num_players) if i != p]
+
+            for i in other_players:
+                state += f"Player {i}"
+                state += "        " * int(len(player_cards[i]) // 2)
+            state += "\n"
+
+            for i in range(len(player_cards[0][0])):
+                for j in other_players:
+                    for k in range(2):
+                        state += player_cards[j][k][i] + " "
+                    state += "\t"
+                state += "\n"
+
+            for i in range(len(player_cards[0][0])):
+                for j in other_players:
+                    for k in range(2, len(player_cards[j])):
+                        state += player_cards[j][k][i] + " "
+                    state += "\t"
+                state += "\n"
+            
+            state += "\n"
+
+            for i in range(len(middle[0])):
+                state += middle[0][i] + " " + middle[1][i] +"\n"
+
+            state += "\n"
+
+            for i in range(len(player_cards[0][0])):
+                for j in range(2, len(player_cards[p])):
+                    state += player_cards[p][j][i] + " "
+                state += "\n"
+
+            card0 = self.players[p].cards[0].display(show=True) if first_turn else player_cards[p][0]
+            card1 = self.players[p].cards[1].display(show=True) if first_turn else player_cards[p][1]
+            
+            for i in range(len(player_cards[0][0])):
+                state += card0[i] + " " + card1[i] + "\n"
+
+            game_state.append(state)
+
         return game_state
 
     def draw(self):
@@ -157,7 +228,7 @@ class Cambio():
                 raise ValueError(f"Invalid input. Please try again.")
             player = int(input[0])
             pos = int(input[1])
-            if player > len(self.players) or player < 0:
+            if player > self.num_players or player < 0:
                 raise ValueError(f"Player {player} does not exist.")
             if player == self.turn:
                 raise ValueError(f"You cannot look at your own card, you must choose another player.")
@@ -186,7 +257,7 @@ class Cambio():
 
     def call_cambio(self):
         self.last_turn = True
-        self.last_player = (self.turn + len(self.players)) % len(self.players)
+        self.last_player = (self.turn + self.num_players) % self.num_players
 
     def get_winner(self):
         best_players = []
