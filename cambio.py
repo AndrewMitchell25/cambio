@@ -47,7 +47,13 @@ class Deck():
         random.shuffle(self.deck)
 
     def draw(self):
-        card = self.deck.pop() if self.deck else None #TODO: FIGURE OUT WHAT TO DO WHEN CARDS RUN OUT
+        if len(self.deck) > 0:
+            card = self.deck.pop() 
+        else:
+            self.deck = self.played_cards
+            self.played_cards = []
+            random.shuffle(self.deck)
+            
         self.drawn.append(card)
         return card
     
