@@ -80,6 +80,7 @@ class Cambio():
         self.num_cards = 4
         self.last_player = -1
         self.last_turn = False
+        #TODO: Maybe add this to log or checkpoint somewhere
         self.extra_cards = -1
 
     def setup(self):
@@ -108,10 +109,10 @@ class Cambio():
             self.deck.display()
         ]
 
-        player_cards = [[card.display(show=False, num=i) for i, card in enumerate(player.cards)] for player in self.players]
+        player_cards = [[card.display(show=False, num=i) if card else ["        "] * 5 for i, card in enumerate(player.cards)] for player in self.players]
         
         for p in range(self.num_players):
-            state = ""
+            state = "---------------------------\n"
             
             other_players = [i for i in range(self.num_players) if i != p]
 
@@ -151,6 +152,8 @@ class Cambio():
             
             for i in range(len(player_cards[0][0])):
                 state += card0[i] + " " + card1[i] + "\n"
+            
+            state += "---------------------------\n"
 
             game_state.append(state)
 
@@ -173,16 +176,16 @@ class Cambio():
         self.deck.played_cards.append(temp)
 
     def swap(self, pos1, player2, pos2):
-        if self.players[self.turn].cards[pos1] == None:
+        if pos1 < len(self.players[self.turn].cards) or pos1 < 0 or self.players[self.turn].cards[pos1] == None:
             raise ValueError(f"You do not have a card at position {pos1}.")
-        if self.players[player2].cards[pos2] == None:
+        if pos2 < len(self.players[player2].cards) or pos2 < 0 or self.players[player2].cards[pos2] == None:
             raise ValueError(f"Player {player2} does not have a card at position {pos2}.")
         temp = self.players[self.turn].cards[pos1]
         self.players[self.turn].cards[pos1] = self.players[player2].cards[pos2]
         self.players[player2].cards[pos2] = temp
 
     def stick(self, stick_player, stuck_player, pos):
-        if self.players[stuck_player].cards[pos] == None:
+        if pos < len(self.players[stuck_player].cards) or pos < 0 or self.players[stuck_player].cards[pos] == None:
             raise ValueError(f"Player {stick_player} attempted to stick Player {stuck_player}'s card at position {pos} but there is no card there.")
         if self.players[stuck_player].cards[pos].rank != self.deck.played_cards[-1].rank:
             self.players[stick_player].cards.append(self.deck.draw())
@@ -191,10 +194,10 @@ class Cambio():
         self.players[stuck_player].cards[pos] = None
 
     def give(self, player1, pos1, player2, pos2):
-        if self.players[player1].cards[pos1] == None:
-            raise ValueError(f"ERROR") #TODO
-        if self.players[player2].cards[pos2] != None:
-            raise ValueError(f"ERROR") #TODO
+        if pos1 < len(self.players[self.turn].cards) or pos1 < 0 or self.players[player1].cards[pos1] == None:
+            raise ValueError(f"You do not have a card at position {pos1}.")
+        if pos2 < len(self.players[player2].cards) or pos2 < 0 or self.players[player2].cards[pos2] == None:
+            raise ValueError(f"Player {player2} does not have a card at position {pos2}.") 
         self.players[player2].cards[pos2] = self.players[player1].cards[pos1]
         self.players[player1].cards[pos1] = None
 
@@ -264,7 +267,7 @@ class Cambio():
         best_score = float('inf')
         scores = []
         for i, player in enumerate(self.players):
-            score = sum([card.get_value() for card in player.cards])
+            score = sum([card.get_value() if card else 0 for card in player.cards])
             player.score += score
             scores.append(score)
             if score < best_score:
@@ -295,4 +298,4 @@ class Cambio():
         for i, player in enumerate(self.players):
             s.append(f"\tPlayer {i}: {player.score}")
         
-        return "\n".join(s)
+        return "\n".join(s) + "\n"

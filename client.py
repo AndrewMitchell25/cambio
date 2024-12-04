@@ -55,6 +55,8 @@ class CambioClient:
             if isinstance(message, str) and message.startswith("Error"):
                 print(message)
                 exit(1)
+            if isinstance(message, str) and message.startswith("EXIT"):
+                exit(0)
 
             return message   
         
@@ -70,7 +72,6 @@ class CambioClient:
         if len(input_data) > 20:
             print("Error: Input is too long, please try again.")
             return
-        #print(input_data) #TESTING
         self.socket.sendall(json.dumps(input_data).encode())
 
     def game_loop(self):

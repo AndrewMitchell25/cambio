@@ -61,21 +61,21 @@ class CambioServer:
             udp_socket.close()
 
     def accept_clients(self, only_setup=False):
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.bind(('', self.port))
-        server_socket.listen(5)
-        self.port = server_socket.getsockname()[1]
+        if self.server_socket == None:
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.bind(('', self.port))
+            server_socket.listen(5)
+            self.port = server_socket.getsockname()[1]
+            self.client_sockets[server_socket] = "server"
+            self.server_socket = server_socket
         print(f"Listening on port {self.port}")
         
         self.send_heartbeat()
         
-        self.client_sockets[server_socket] = "server"
-        self.server_socket = server_socket
         if not only_setup:
             for _ in range(self.num_players):
-                (client_socket, address) = server_socket.accept()
+                (client_socket, address) = self.server_socket.accept()
                 print(f"Client {address} connected")
-                #client_socket.settimeout(1)
                 self.client_sockets[client_socket] = address
                 self.players.append(client_socket)  
 
@@ -84,12 +84,7 @@ class CambioServer:
         for i in range(self.num_players):
             self.send_to_client(i, state[i])
 
-
-    def send_player_cards(self, client_num):
-        pass
-
     def wait_for_sticking(self):
-        #TODO: WORK ON THIS
         self.send_to_all_clients("All players may now attempt to stick a card. Enter the player number and the position of the card you'd like to stick.")
         count = 0
         while count < 10:
@@ -106,7 +101,7 @@ class CambioServer:
                             continue
                         
                         message = list(map(int, json.loads(data).split()))
-                        print(f"MESSAFGE: {message}")
+                        print(f"MESSAGE: {message}") #TESTING
 
                         if len(message) != 2:
                             self.send_to_client(client_num, f"That is not a valid input. Please try again.")
@@ -115,6 +110,7 @@ class CambioServer:
                         try:
                             self.cambio.stick(client_num, message[0], message[1])
                             self.send_to_all_clients(f"Player {client_num} has stuck Player {message[0]}'s card in position {message[1]}, which was the {self.cambio.deck.played_cards[-1].name()}.")
+                            self.send_game_state()
                         except ValueError as e:
                             self.send_to_all_clients(str(e))
                             continue
@@ -135,9 +131,6 @@ class CambioServer:
                     except Exception as e:
                         print(f"Error: {e}")
             count += 1
-
-    def save_game_state(self):
-        pass
 
     def reconnect_client(self, client_num, send_message=True):
         if send_message:
@@ -172,11 +165,22 @@ class CambioServer:
                 self.reconnect_client(client_num)
             else:
                 break
-        print(data) #TESTING
         return json.loads(data)
 
+    def log(self):
+        log = {
+            'turn': self.cambio.turn,
+            'players': [[[card.rank, card.suit] if card else "None" for card in p.cards] for p in self.cambio.players],
+            'played_cards': [[card.rank, card.suit] for card in self.cambio.deck.played_cards],
+            'deck_len': len(self.cambio.deck.deck),
+            'last_turn': self.cambio.last_turn,
+            'last_player': self.cambio.last_player
+        }
+
+        self.log_file.write(json.dumps(log) + "\n")
+
     def setup(self):
-        self.cambio = Cambio(self.num_players)
+        self.game_over = False
 
         self.cambio.setup()
 
@@ -193,36 +197,48 @@ class CambioServer:
                 self.accept_clients(True)
 
                 self.cambio.deck.deck = [Card(card[0], card[1]) for card in game_state['deck']]
-                self.cambio.deck.played_cards = [Card(card[0], card[1]) for card in game_state['played_cards']]
                 for i, player in enumerate(game_state['players']):
                     self.cambio.players[i].score = player['score']
-                    self.cambio.players[i].cards = [Card(card[0], card[1]) if card else None for card in player['cards'] ]
+                    self.cambio.players[i].cards = [Card(card[0], card[1]) if card else None for card in player['cards']]
                     self.players.append(str(i))
                     self.client_sockets[str(i)] = player['address']
 
                     self.reconnect_client(i, False)
 
                 self.log_file.seek(0)
+                log_data = False
                 for log in self.log_file:
-                    log = json.loads(log.strip())
+                    log_data = True
+                    log = json.loads(log.rstrip())
+                    self.cambio.turn = log['turn']
+                    self.cambio.last_turn = log['last_turn']
+                    self.cambio.last_player = log['last_player']
+                    self.cambio.deck.played_cards = [Card(card[0], card[1]) for card in log['played_cards']]
+                    while len(self.cambio.deck.deck) > log['deck_len']:
+                        self.cambio.deck.draw()
+                    for i, cards in enumerate(log['players']):
+                        self.cambio.players[i].cards = [Card(card[0], card[1]) if card != "None" else None for card in cards]
+                if log_data:
+                    self.cambio.turn = (self.cambio.turn + 1) % self.cambio.num_players
+                print(list(map(str, self.cambio.deck.deck)))
 
             #Starting a new game
             else:
                 if self.new_game:
+                    self.client_sockets = {}
+                    self.players = []
                     self.accept_clients()
                 game_state = {}
-                game_state['deck'] = [str(card) for card in self.cambio.deck.deck]
-                game_state['played_cards'] = [str(card) for card in self.cambio.deck.played_cards]
+                game_state['deck'] = [[card.rank, card.suit] for card in self.cambio.deck.deck]
                 game_state['players'] = [{
                         'address': self.client_sockets[self.players[i]],
                         'score': p.score,
-                        'cards': [str(card) for card in p.cards]
+                        'cards': [[card.rank, card.suit] for card in p.cards]
                     } for i, p in enumerate(self.cambio.players)]
                 checkpoint_file.write(json.dumps(game_state))
 
                 self.pregame()
         
-
     def pregame(self):
         self.send_to_all_clients("The game is now starting.")
 
@@ -231,91 +247,99 @@ class CambioServer:
         self.send_game_state(first_turn=True)
 
     def play_game(self):
-        
+        i = self.cambio.turn
         while not self.game_over:
-            for i, player in enumerate(self.cambio.players):
-                self.cambio.turn = i
-                if self.cambio.last_turn and self.cambio.last_player == i:
-                    self.game_over = True
-                    break
-                self.send_game_state()
-                self.send_to_all_clients(f"Player {i}'s turn.")
-                while True:
-                    self.send_to_client(i, "What would you like to do?\n\t1. Draw a card.\n\t2. Call Cambio.")
-                    turn_type = int(self.get_client_input(i))
-                    if turn_type == 1:
-                        self.cambio.draw()
-                        while True:
-                            self.send_to_client(i, f"You drew the {player.hand.name()}. What would you like to do?\n\t1. Replace one of your cards with the new card.\n\t2. Play the new card.")
-                            input = self.get_client_input(i)
-                            if input == "1":
+            player = self.cambio.players[i]
+            self.cambio.turn = i
+            if self.cambio.last_turn and self.cambio.last_player == i:
+                self.game_over = True
+                break
+            self.send_game_state()
+            self.send_to_all_clients(f"Player {i}'s turn.")
+            while True:
+                self.send_to_client(i, "What would you like to do?\n\t1. Draw a card.\n\t2. Call Cambio.")
+                turn_type = int(self.get_client_input(i))
+                if turn_type == 1:
+                    self.cambio.draw()
+                    while True:
+                        self.send_to_client(i, f"You drew the {player.hand.name()}. What would you like to do?\n\t1. Replace one of your cards with the new card.\n\t2. Play the new card.")
+                        input = self.get_client_input(i)
+                        if input == "1":
+                            while True:
+                                self.send_to_client(i, "Which position would you like to switch with?")
+                                self.send_player_cards(i)
+                                pos = int(self.get_client_input(i))
+                                try:
+                                    self.cambio.place(pos)
+                                    break
+                                except ValueError as e:
+                                    self.send_to_client(i, str(e))
+                            self.send_to_all_clients(f"Player {i} placed the drawn card in position {pos} and played the {self.cambio.deck.played_cards[-1].name()}.")
+                            break
+                        elif input == "2":
+                            self.cambio.play()
+                            self.send_to_all_clients(f"Player {i} played the {self.cambio.deck.played_cards[-1].name()}.")
+                            power = self.cambio.has_power()
+                            if power:
                                 while True:
-                                    self.send_to_client(i, "Which position would you like to switch with?")
-                                    self.send_player_cards(i)
-                                    pos = int(self.get_client_input(i))
+                                    self.send_to_client(i, power)
+                                    power_input = self.get_client_input(i).split()
                                     try:
-                                        self.cambio.place(pos)
+                                        res, K_power = self.cambio.use_power(power_input)
+                                        if K_power:
+                                            while True:
+                                                self.send_to_client(i, f"That card is the {res}. Would you like to swap? If yes, enter the position of one of your cards that you would like to swap. If no, enter -1.")
+                                                K_power_input = int(self.get_client_input(i))
+                                                if K_power_input != -1:
+                                                    try:
+                                                        self.cambio.swap(K_power_input, int(power_input[0]), int(power_input[1]))
+                                                        self.send_to_all_clients(f"Player {i} switched the card in position {K_power_input} with Player {power_input[0]}'s card in position {power_input[1]}.")
+                                                        break
+                                                    except ValueError as e:
+                                                        self.send_to_client(i, str(e))
+                                        elif res and isinstance(res, str):
+                                            self.send_to_client(i, f"That card is the {res}.")
+                                        elif res and isinstance(res, list):
+                                            self.send_to_all_clients(f"Player {i} switched the card in position {res[0]} with Player {res[1]}'s card in position {res[2]}.")
+                                        else:
+                                            self.send_to_all_clients(f"Player {i} has declined the power.")
                                         break
                                     except ValueError as e:
                                         self.send_to_client(i, str(e))
-                                self.send_to_all_clients(f"Player {i} placed the drawn card in position {pos} and played the {self.cambio.deck.played_cards[-1].name()}.")
-                                break
-                            elif input == "2":
-                                self.cambio.play()
-                                self.send_to_all_clients(f"Player {i} played the {self.cambio.deck.played_cards[-1].name()}.")
-                                power = self.cambio.has_power()
-                                if power:
-                                    while True:
-                                        self.send_to_client(i, power)
-                                        power_input = self.get_client_input(i).split()
-                                        try:
-                                            res, K_power = self.cambio.use_power(power_input)
-                                            if K_power:
-                                                while True:
-                                                    self.send_to_client(i, f"That card is the {res}. Would you like to swap? If yes, enter the position of one of your cards that you would like to swap. If no, enter -1.")
-                                                    K_power_input = int(self.get_client_input(i))
-                                                    if K_power_input != -1:
-                                                        try:
-                                                            self.cambio.swap(K_power_input, int(power_input[0]), int(power_input[1]))
-                                                            self.send_to_all_clients(f"Player {i} switched the card in position {K_power_input} with Player {power_input[0]}'s card in position {power_input[1]}.")
-                                                            break
-                                                        except ValueError as e:
-                                                            self.send_to_client(i, str(e))
-                                            elif res and isinstance(res, str):
-                                                self.send_to_client(i, f"That card is the {res}.")
-                                            elif res and isinstance(res, list):
-                                                self.send_to_all_clients(f"Player {i} switched the card in position {res[0]} with Player {res[1]}'s card in position {res[2]}.")
-                                            else:
-                                                self.send_to_all_clients(f"Player {i} has declined the power.")
-                                            break
-                                        except ValueError as e:
-                                            self.send_to_client(i, str(e))
-                                break
-                            else:
-                                print("Please pick 1 or 2.")
-                        break
-                    elif turn_type == 2:
-                        if not self.cambio.last_turn:
-                            self.cambio.call_cambio()
-                            self.send_to_all_clients(f"Player {i} has called Cambio. This will be the last round of the game.")
                             break
                         else:
-                            self.send_to_client(i, "Cambio has already been called.")
+                            print("Please pick 1 or 2.")
+                    break
+                elif turn_type == 2:
+                    if not self.cambio.last_turn:
+                        self.cambio.call_cambio()
+                        self.send_to_all_clients(f"Player {i} has called Cambio. This will be the last round of the game.")
+                        break
                     else:
-                        pass
+                        self.send_to_client(i, "Cambio has already been called.")
+                else:
+                    pass
 
-                self.send_game_state()
+            self.send_game_state()
 
-                self.wait_for_sticking()
+            self.wait_for_sticking()
+            self.log()
+            i = (i + 1) % self.num_players
 
+        self.send_game_state(True)
         self.send_to_all_clients(f"The game is over.\n\n{self.cambio.get_winner()}\nEnter 1 to play again or 0 to quit.")
         os.remove(self.ckpt_file_name)
+        self.log_file.close()
+        self.log_file = None
         os.remove(self.log_file_name)
         #TODO: WAIT FOR INPUT AND IF ANY CLIENTS PRESS 1 CONTINUE
         #IF ANY CLIENT PRESSES 0, RETURN BACK TO LOOP() 
+        #TODO: GO BACK TO ACCEPTING CLIENTS? SO SERVER DOESN"T DIE
         if int(self.get_client_input(0)) == 0:
-            #TODO: CHANGE TO GO BACK TO ACCEPT CLIENTS OR SOMETHING
-            exit()
+            self.send_to_all_clients("EXIT")
+            self.new_game = True
+            return
+
         self.new_game = False
         return 
                     
