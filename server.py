@@ -32,9 +32,6 @@ class CambioServer:
             print(f"ERROR: {e}") #TESTING
             self.reconnect_client(client_num)
 
-
-        #print(f"Sent to Player {client_num}: {message}") #TESTING
-
     def send_to_all_clients(self, message, skip=None):
         for i in range(self.num_players):
             if skip == i:
@@ -79,8 +76,8 @@ class CambioServer:
                 self.client_sockets[client_socket] = address
                 self.players.append(client_socket)  
 
-    def send_game_state(self, first_turn=False):
-        state = self.cambio.game_state(first_turn=first_turn)
+    def send_game_state(self, first_turn=False, show_all=False):
+        state = self.cambio.game_state(first_turn=first_turn,show_all=show_all)
         for i in range(self.num_players):
             self.send_to_client(i, state[i])
 
@@ -101,7 +98,6 @@ class CambioServer:
                             continue
                         
                         message = list(map(int, json.loads(data).split()))
-                        print(f"MESSAGE: {message}") #TESTING
 
                         if len(message) != 2:
                             self.send_to_client(client_num, f"That is not a valid input. Please try again.")
@@ -267,7 +263,6 @@ class CambioServer:
                         if input == "1":
                             while True:
                                 self.send_to_client(i, "Which position would you like to switch with?")
-                                self.send_player_cards(i)
                                 pos = int(self.get_client_input(i))
                                 try:
                                     self.cambio.place(pos)
@@ -326,7 +321,7 @@ class CambioServer:
             self.log()
             i = (i + 1) % self.num_players
 
-        self.send_game_state(True)
+        self.send_game_state(False, True)
         self.send_to_all_clients(f"The game is over.\n\n{self.cambio.get_winner()}\nEnter 1 to play again or 0 to quit.")
         os.remove(self.ckpt_file_name)
         self.log_file.close()
