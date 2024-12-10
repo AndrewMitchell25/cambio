@@ -40,10 +40,8 @@ class MockClient:
 
     def receive_message(self):
         try:    
-            # Read the length of the message
             message_length = int(self.socket.recv(10).decode())
 
-            # Receive the full message
             message_data = b""
             while len(message_data) < message_length:
                 chunk = self.socket.recv(min(1024, message_length - len(message_data)))
@@ -51,7 +49,6 @@ class MockClient:
                     break
                 message_data += chunk
 
-            # Decode and parse as JSON
             decoded_message = message_data.decode()
             try:
                 message = json.loads(decoded_message)
@@ -77,21 +74,15 @@ class MockClient:
         if len(input_data) > 20:
             print("Error: Input is too long, please try again.")
             return
-        #print(input_data) #TESTING
         self.socket.sendall(json.dumps(input_data).encode())
 
     def game_loop(self):
         total_requests = 0
         total_time = 0
         while True:
-            # ready_inputs, _, _ = select.select([self.socket, sys.stdin], [], [], 1) # checks to see if it needs to read from socket or in sys.stdin
-            # for source in ready_inputs:
-            #     if source is self.socket:
             message = self.receive_message()
             total_requests += 1
-            # Automatically respond to specific prompts
             if "What would you like to do?" in message:
-                # Automatically respond with "1"
                 response = str(random.choice([1,1,1,2]))
                 print(f"Automatically responding: {response}")
                 self.socket.sendall(json.dumps(response).encode())
@@ -106,8 +97,7 @@ class MockClient:
 
             
             elif "Enter 1 to play again or 0 to quit" in message:
-                # Automatically respond with "1" (to continue) or "0" (to quit)
-                response = "0"  # Change to "0" to simulate quitting
+                response = "0"
                 end = time.time()
                 time_elapsed = end - start
                 print(f"Automatically responding: {response}")
@@ -127,10 +117,6 @@ class MockClient:
             
             else:
                 print(message)
-
-                # elif source is sys.stdin:
-                #     # Manual input for other cases
-                #     self.send_input()
 
 
 
