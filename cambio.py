@@ -295,7 +295,7 @@ class Cambio():
             if len(best_players) == 1:
                 s.append(f"The winner is Player {best_players[0]}.")
             else:
-                s2 = f"The winners are: Player " + ", Player ".join(best_players) + "."
+                s2 = f"The winners are: Player " + ", Player ".join(map(str, best_players)) + "."
                 s.append(s2)
 
         s.append("")
