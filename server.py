@@ -29,7 +29,7 @@ class CambioServer:
         try:
             self.players[client_num].sendall(message)
         except Exception as e:
-            print(f"ERROR: {e}") #TESTING
+            print(f"Client send error: {e}")
             self.reconnect_client(client_num)
 
     def send_to_all_clients(self, message, skip=None):
@@ -38,8 +38,6 @@ class CambioServer:
                 continue
 
             self.send_to_client(i, message)
-
-        #print(f"Sent to all players: {message}")
 
     def send_heartbeat(self):
         try:
@@ -93,7 +91,7 @@ class CambioServer:
                         client_num = self.players.index(sock)
 
                         if not data:
-                            print(f"Client {self.client_sockets[sock]} disconnected") #TESTING
+                            print(f"Client {self.client_sockets[sock]} disconnected")
                             self.reconnect_client(client_num)
                             continue
                         
@@ -139,12 +137,12 @@ class CambioServer:
                 del self.client_sockets[self.players[client_num]]
                 self.client_sockets[client_socket] = address
                 self.players[client_num] = client_socket
-                print(f"Client {address} connected") #TESTING
+                print(f"Client {address} connected")
                 if send_message:
                     self.send_to_all_clients(f"Player {client_num} has reconnected.")
                 return
             else:
-                print(f"Incorrect client has tried to connect: {address}") #TESTING
+                print(f"Incorrect client has tried to connect: {address}")
                 message_data = json.dumps("Error: The server you are trying to connect to is full. Please try another server.").encode()
                 message_length = str(len(message_data)).zfill(10).encode()
                 message = message_length + message_data
@@ -157,7 +155,7 @@ class CambioServer:
         while True:
             data = self.players[client_num].recv(1024).decode()
             if not data:
-                print(f"Player {client_num} (Client {self.client_sockets[self.players[client_num]]}) disconnected") #TESTING
+                print(f"Player {client_num} (Client {self.client_sockets[self.players[client_num]]}) disconnected")
                 self.reconnect_client(client_num)
             else:
                 break
@@ -327,9 +325,7 @@ class CambioServer:
         self.log_file.close()
         self.log_file = None
         os.remove(self.log_file_name)
-        #TODO: WAIT FOR INPUT AND IF ANY CLIENTS PRESS 1 CONTINUE
-        #IF ANY CLIENT PRESSES 0, RETURN BACK TO LOOP() 
-        #TODO: GO BACK TO ACCEPTING CLIENTS? SO SERVER DOESN"T DIE
+
         if int(self.get_client_input(0)) == 0:
             self.send_to_all_clients("EXIT")
             self.new_game = True
@@ -346,15 +342,11 @@ class CambioServer:
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Please include server name and number of players.")
+        print("Usage is 'python server.py <server_name> <player_num>'")
         sys.exit(1)
         
     server_name = sys.argv[1]
     player_num = int(sys.argv[2])
-
-    #if player_num != 2 and player_num != 4:
-    #    print("Only 2 or 4 players.")
-    #    sys.exit(1)
 
     server = CambioServer(server_name, player_num)
     server.game_loop()

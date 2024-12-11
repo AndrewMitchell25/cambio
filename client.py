@@ -86,7 +86,7 @@ class CambioClient:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Please include server name.")
+        print("Usage is 'python client.py <server_name>'")
         sys.exit(1)
 
     server_name = sys.argv[1]

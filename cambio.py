@@ -86,7 +86,6 @@ class Cambio():
         self.num_cards = 4
         self.last_player = -1
         self.last_turn = False
-        #TODO: Maybe add this to log or checkpoint somewhere
         self.extra_cards = -1
 
     def setup(self):
@@ -105,10 +104,7 @@ class Cambio():
 
         self.extra_cards = -1
 
-
     def game_state(self, first_turn=False, show_all=False):
-        #TODO: UNFINISHED
-
         game_state = []
         middle = [
             self.deck.played_cards[-1].display(show=True) if self.deck.played_cards else self.deck.deck[0].display(show=False),
@@ -172,9 +168,8 @@ class Cambio():
         self.deck.played_cards.append(self.players[self.turn].hand)
         self.players[self.turn].hand = None
 
-    #TODO: MORE ERROR HANDLING FOR ALL FUNCTIONS
     def place(self, pos):
-        if self.players[self.turn].cards[pos] == None:
+        if pos > len(self.players[self.turn].cards) or pos < 0 or self.players[self.turn].cards[pos] == None:
             raise ValueError(f"You do not have a card at position {pos}.")
         temp = self.players[self.turn].cards[pos]
         self.players[self.turn].cards[pos] = self.players[self.turn].hand
@@ -184,6 +179,8 @@ class Cambio():
     def swap(self, pos1, player2, pos2):
         if pos1 > len(self.players[self.turn].cards) or pos1 < 0 or self.players[self.turn].cards[pos1] == None:
             raise ValueError(f"You do not have a card at position {pos1}.")
+        if player2 < 0 or player2 > self.num_players or player2 == self.turn:
+            raise ValueError(f"You cannot swap with Player {player2}.")
         if pos2 > len(self.players[player2].cards) or pos2 < 0 or self.players[player2].cards[pos2] == None:
             raise ValueError(f"Player {player2} does not have a card at position {pos2}.")
         temp = self.players[self.turn].cards[pos1]
@@ -191,6 +188,8 @@ class Cambio():
         self.players[player2].cards[pos2] = temp
 
     def stick(self, stick_player, stuck_player, pos):
+        if stuck_player < 0 or stuck_player > self.num_players:
+            raise ValueError(f"You cannot stick Player {stuck_player}.")
         if pos > len(self.players[stuck_player].cards) or pos < 0 or self.players[stuck_player].cards[pos] == None:
             raise ValueError(f"Player {stick_player} attempted to stick Player {stuck_player}'s card at position {pos} but there is no card there.")
         if self.players[stuck_player].cards[pos].rank != self.deck.played_cards[-1].rank:
@@ -200,10 +199,10 @@ class Cambio():
         self.players[stuck_player].cards[pos] = None
 
     def give(self, player1, pos1, player2, pos2):
-        if pos1 > len(self.players[self.turn].cards) or pos1 < 0 or self.players[player1].cards[pos1] == None:
-            raise ValueError(f"You do not have a card at position {pos1}.")
-        if pos2 > len(self.players[player2].cards) or pos2 < 0 or self.players[player2].cards[pos2] == None:
-            raise ValueError(f"Player {player2} does not have a card at position {pos2}.") 
+        if player2 < 0 or player2 > self.num_players:
+            raise ValueError(f"You cannot give to Player {player2}.")
+        if pos1 > len(self.players[player1].cards) or pos1 < 0 or self.players[player1].cards[pos1] == None:
+            raise ValueError(f"You do not have a card at position {pos1}.")      
         self.players[player2].cards[pos2] = self.players[player1].cards[pos1]
         self.players[player1].cards[pos1] = None
 
@@ -221,7 +220,6 @@ class Cambio():
             return "You may look at another players card and decide if you want to swap with it or not. Enter the player number and the position of the card you'd like to look at. Enter -1 to decline the power."
 
     def use_power(self, input):
-        #TODO: NEEDS MORE ERROR HANDLING
         card = self.deck.played_cards[-1]
         if card.rank not in {'7', '8', '9', '10', 'J', 'Q', 'K'}:
             return
@@ -229,11 +227,11 @@ class Cambio():
             return None, None
         if card.rank in {'7', '8'}:
             pos = int(input[0])
-            if self.players[self.turn].cards[pos] == None:
+            if pos < 0 or pos > len(self.players[self.turn].cards) or self.players[self.turn].cards[pos] == None:
                 raise ValueError(f"You do not have a card in that position.")
             return str(self.players[self.turn].cards[pos].name()), None
         elif card.rank in {'9', '10' , 'K'}:
-            if len(input) < 2:
+            if len(input) != 2:
                 raise ValueError(f"Invalid input. Please try again.")
             player = int(input[0])
             pos = int(input[1])
@@ -243,13 +241,13 @@ class Cambio():
                 raise ValueError(f"You cannot look at your own card, you must choose another player.")
             if player == self.last_player and self.last_turn:
                 raise ValueError(f"You cannot use a power on the player who called Cambio.")
-            if self.players[player].cards[pos] == None:
+            if pos < 0 or pos > len(self.players[player].cards) or self.players[player].cards[pos] == None:
                 raise ValueError(f"Player {player} does not have a card in that position.")
             if card.rank != 'K':
                 return str(self.players[player].cards[pos].name()), None
             return str(self.players[player].cards[pos].name()), True
         elif card.rank in {'J', 'Q'}:
-            if len(input) < 3:
+            if len(input) != 3:
                 raise ValueError(f"Invalid input. Please try again.")
             pos = int(input[0])
             player = int(input[1])
@@ -258,6 +256,12 @@ class Cambio():
                 raise ValueError(f"You cannot swap with yourself, you must choose another player.")
             if player == self.last_player and self.last_turn:
                 raise ValueError(f"You cannot use a power on the player who called Cambio.")
+            if player < 0 or player > self.num_players or player:
+                raise ValueError(f"You cannot swap with Player {player}.")
+            if pos > len(self.players[self.turn].cards) or pos < 0 or self.players[self.turn].cards[pos] == None:
+                raise ValueError(f"You do not have a card at position {pos}.")
+            if pos2 > len(self.players[player].cards) or pos2 < 0 or self.players[player].cards[pos2] == None:
+                raise ValueError(f"Player {player} does not have a card at position {pos2}.")
             self.swap(pos, player, pos2)
             return [pos, player, pos2], None
 
